@@ -1,0 +1,53 @@
+name: win-cuda build (PR 30966 moe-cache-cpu-misses)
+
+# Personal build: llama.cpp PR #30966 for an RTX 3060 Laptop (sm_86) on Windows.
+on:
+  push:
+    branches: [moe-cache-cpu-misses-win]
+    paths: ['.github/workflows/win-cuda-moe.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Cuda Toolkit
+        uses: ./.github/actions/windows-setup-cuda
+        with:
+          cuda_version: '12.4'
+          cuda_arch: x64
+
+      - name: Install Ninja
+        run: choco install ninja
+
+      - name: Build
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          cmake -S . -B build -G "Ninja Multi-Config" ^
+            -DGGML_NATIVE=OFF ^
+            -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON ^
+            -DGGML_CUDA=ON ^
+            -DCMAKE_CUDA_ARCHITECTURES=86 ^
+            -DGGML_CUDA_CCCL_VERSION=v3.4.3 ^
+            -DLLAMA_BUILD_BORINGSSL=ON
+          set /A NINJA_JOBS=%NUMBER_OF_PROCESSORS%-1
+          cmake --build build --config Release -j %NINJA_JOBS% --target llama-server llama-bench llama-cli
+
+      - name: Pack
+        shell: pwsh
+        run: |
+          Copy-Item scripts\moe-cache-tune.py build\bin\Release\ -ErrorAction SilentlyContinue
+          git rev-parse HEAD | Out-File build\bin\Release\COMMIT.txt
+          7z a llama-win-cuda12.4-sm86-pr30966.zip .\build\bin\Release\*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: llama-win-cuda12.4-sm86-pr30966
+          path: llama-win-cuda12.4-sm86-pr30966.zip
+          retention-days: 7

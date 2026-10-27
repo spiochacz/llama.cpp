@@ -4,11 +4,12 @@ name: win-cuda build (PR 30966 moe-cache-cpu-misses)
 on:
   push:
     branches: [moe-cache-cpu-misses-win]
-    paths: ['.github/workflows/win-cuda-moe.yml']
+    paths: ['.github/workflows/win-cuda-moe.yml', 'src/**', 'ggml/**', 'common/**', 'tools/server/**']
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
   build:
@@ -24,6 +25,13 @@ jobs:
 
       - name: Install Ninja
         run: choco install ninja
+
+      # ccache: the first run fills the cache; later rebuilds only recompile what changed
+      - name: ccache
+        uses: ggml-org/ccache-action@v1.2.24
+        with:
+          key: win-cuda12.4-sm86
+          evict-old-files: 7d
 
       - name: Build
         shell: cmd

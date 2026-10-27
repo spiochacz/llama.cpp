@@ -2566,6 +2566,11 @@ uint32_t llama_context::graph_max_nodes(uint32_t n_tokens) const {
         res *= 4;
     }
 
+    // the MoE cache's CPU part splits each cached MoE layer into a GPU and a CPU branch
+    if (cparams.moe_cache_size > 0 && cparams.moe_cache_cpu_share > 0.0f) {
+        res *= 2;
+    }
+
     return res;
 }
 

@@ -1,6 +1,6 @@
 name: win-cuda build (PR 30966 moe-cache-cpu-misses)
 
-# Personal build: llama.cpp PR #30966 for an RTX 3060 Laptop (sm_86) on Windows.
+# Personal build: llama.cpp PR #30966 for RTX 3060 (sm_86) and GTX 1070 (sm_61) on Windows.
 on:
   push:
     branches: [moe-cache-cpu-misses-win]
@@ -30,7 +30,7 @@ jobs:
       - name: ccache
         uses: ggml-org/ccache-action@v1.2.24
         with:
-          key: win-cuda12.4-sm86
+          key: win-cuda12.4-sm61-sm86
           evict-old-files: 7d
 
       - name: Build
@@ -41,7 +41,7 @@ jobs:
             -DGGML_NATIVE=OFF ^
             -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON ^
             -DGGML_CUDA=ON ^
-            -DCMAKE_CUDA_ARCHITECTURES=86 ^
+            -DCMAKE_CUDA_ARCHITECTURES="61;86" ^
             -DGGML_CUDA_CCCL_VERSION=v3.4.3 ^
             -DLLAMA_BUILD_BORINGSSL=ON
           set /A NINJA_JOBS=%NUMBER_OF_PROCESSORS%-1
@@ -52,10 +52,10 @@ jobs:
         run: |
           Copy-Item scripts\moe-cache-tune.py build\bin\Release\ -ErrorAction SilentlyContinue
           git rev-parse HEAD | Out-File build\bin\Release\COMMIT.txt
-          7z a llama-win-cuda12.4-sm86-pr30966.zip .\build\bin\Release\*
+          7z a llama-win-cuda12.4-sm61-sm86-pr30966.zip .\build\bin\Release\*
 
       - uses: actions/upload-artifact@v4
         with:
-          name: llama-win-cuda12.4-sm86-pr30966
-          path: llama-win-cuda12.4-sm86-pr30966.zip
+          name: llama-win-cuda12.4-sm61-sm86-pr30966
+          path: llama-win-cuda12.4-sm61-sm86-pr30966.zip
           retention-days: 7

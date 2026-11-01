@@ -3,7 +3,7 @@ name: win-cuda build (PR 30966 moe-cache-cpu-misses)
 # Personal build: llama.cpp PR #30966 for RTX 3060 (sm_86) and GTX 1070 (sm_61) on Windows.
 on:
   push:
-    branches: [moe-cache-cpu-misses-win]
+    branches: [moe-cache-cpu-misses-win, moe-cache-win-b12032]
     paths: ['.github/workflows/win-cuda-moe.yml', 'src/**', 'ggml/**', 'common/**', 'tools/server/**']
   workflow_dispatch:
 

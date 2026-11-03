@@ -2299,6 +2299,35 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
         cb(weights, "ffn_moe_weights_scaled", il);
     }
 
+    // experimental (LLAMA_MOE_SER="kmin,t[,renorm]"): beyond the first kmin experts, zero the weight of an expert whose
+    // weight is below t times the top one (the selection is sorted). Quality probe only: the experts are still computed.
+    {
+        static const struct ser_cfg { int kmin; float t; bool renorm; } ser = [] {
+            ser_cfg c = { 0, 0.0f, false };
+            if (const char * s = getenv("LLAMA_MOE_SER")) {
+                int r = 0;
+                if (sscanf(s, "%d,%f,%d", &c.kmin, &c.t, &r) >= 2) { c.renorm = r != 0; } else { c.kmin = 0; }
+                LLAMA_LOG_INFO("%s: LLAMA_MOE_SER kmin=%d t=%.3f renorm=%d\n", __func__, c.kmin, c.t, (int) c.renorm);
+            }
+            return c;
+        }();
+        if (ser.kmin > 0 && ser.kmin < n_expert_used && !weight_before_ffn) {
+            ggml_tensor * w2  = ggml_cont(ctx0, ggml_reshape_2d(ctx0, weights, n_expert_used, n_tokens));
+            const size_t  es  = ggml_element_size(w2);
+            ggml_tensor * top = ggml_view_2d(ctx0, w2, 1, n_tokens, w2->nb[1], 0);
+            ggml_tensor * lo  = ggml_cont(ctx0, ggml_view_2d(ctx0, w2, ser.kmin, n_tokens, w2->nb[1], 0));
+            ggml_tensor * hi  = ggml_cont(ctx0, ggml_view_2d(ctx0, w2, n_expert_used - ser.kmin, n_tokens, w2->nb[1], ser.kmin*es));
+            ggml_tensor * thr = ggml_scale(ctx0, ggml_cont(ctx0, top), ser.t);           // [1, n_tokens]
+            ggml_tensor * keep = ggml_step(ctx0, ggml_sub(ctx0, hi, thr));                // 1 where hi > t*top
+            ggml_tensor * wn  = ggml_concat(ctx0, lo, ggml_mul(ctx0, hi, keep), 0);      // [n_expert_used, n_tokens]
+            if (ser.renorm) {
+                wn = ggml_div(ctx0, wn, ggml_div(ctx0, ggml_sum_rows(ctx0, wn), ggml_sum_rows(ctx0, w2)));
+            }
+            cb(wn, "ffn_moe_weights_ser", il);
+            weights = ggml_reshape_3d(ctx0, wn, 1, n_expert_used, n_tokens);
+        }
+    }
+
     //call early so that topk-moe can be used
     ggml_build_forward_expand(gf, weights);
 

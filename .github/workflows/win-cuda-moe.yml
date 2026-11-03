@@ -46,12 +46,17 @@ jobs:
             -DLLAMA_BUILD_BORINGSSL=ON
           set /A NINJA_JOBS=%NUMBER_OF_PROCESSORS%-1
           cmake --build build --config Release -j %NINJA_JOBS% --target llama-server llama-bench llama-cli llama-perplexity
+          rem the same CPU backend without OpenMP (ggml threadpool, spin-waiting barriers), shipped as noomp\ggml-cpu.dll
+          cmake -S . -B build-noomp -G "Ninja Multi-Config" -DGGML_NATIVE=OFF -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_OPENMP=OFF -DLLAMA_BUILD_BORINGSSL=ON
+          cmake --build build-noomp --config Release -j %NINJA_JOBS% --target ggml-cpu
 
       - name: Pack
         shell: pwsh
         run: |
           Copy-Item scripts\moe-cache-tune.py build\bin\Release\ -ErrorAction SilentlyContinue
           git rev-parse HEAD | Out-File build\bin\Release\COMMIT.txt
+          New-Item -ItemType Directory -Force build\bin\Release\noomp | Out-Null
+          Copy-Item build-noomp\bin\Release\ggml-cpu.dll build\bin\Release\noomp\
           7z a llama-win-cuda12.4-sm61-sm86-pr30966.zip .\build\bin\Release\*
 
       - uses: actions/upload-artifact@v4

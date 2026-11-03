@@ -36,6 +36,9 @@ public:
     // its inputs on the device are read together with the selected experts, so the CPU part does not wait for the device
     void set_cpu_part(const ggml_tensor * lookup, int32_t n_used, std::vector<const ggml_tensor *> inputs);
 
+    // trace only (LLAMA_MOE_CACHE_TRACE): the router weights of the experts selected at this slot lookup, written with them
+    void set_trace_weights(const ggml_tensor * lookup, const ggml_tensor * weights);
+
     // called before each graph compute
     void begin();
 

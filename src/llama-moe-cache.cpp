@@ -586,11 +586,12 @@ struct llama_moe_cache::impl {
     // per group: u32 device, n_expert, n_layers, the layers (u32), f64 split, split_sum, u64 group host bytes, device host bytes, alignment,
     //            u32 n_tensors, the bytes of one expert of each tensor (u64)
     // then one record per slot lookup: i32 layer, experts per token, n_ids, the ids (i32)
+    // MCT2: each record is followed by i32 n_w and n_w f32 router weights of the selected experts (0 if not readable)
     void write_trace_header(double split_sum) {
         auto u32 = [&](uint32_t v) { fwrite(&v, sizeof(v), 1, trace); };
         auto u64 = [&](uint64_t v) { fwrite(&v, sizeof(v), 1, trace); };
         auto f64 = [&](double   v) { fwrite(&v, sizeof(v), 1, trace); };
-        fwrite("MCT1", 1, 4, trace);
+        fwrite("MCT2", 1, 4, trace);
         u32(layers.size());
         u32(n_expert_used);
         u32(groups.size());
@@ -618,6 +619,9 @@ struct llama_moe_cache::impl {
         const int32_t rec[3] = { il, n_used, (int32_t) ids.size() };
         fwrite(rec, sizeof(int32_t), 3, trace);
         fwrite(ids.data(), sizeof(int32_t), ids.size(), trace);
+        const int32_t n_w = (int32_t) wbuf.size();
+        fwrite(&n_w, sizeof(int32_t), 1, trace);
+        fwrite(wbuf.data(), sizeof(float), wbuf.size(), trace);
     }
 
     ~impl() {
@@ -708,6 +712,15 @@ struct llama_moe_cache::impl {
         cpu_parts[lookup] = { n_used, std::move(inputs) };
     }
 
+    std::map<const ggml_tensor *, const ggml_tensor *> trace_weights; // slot lookup -> router weights [1, n_used, n_tokens]
+    std::vector<float> wbuf;
+
+    void set_trace_weights(const ggml_tensor * lookup, const ggml_tensor * weights) {
+        if (trace != nullptr) {
+            trace_weights[lookup] = weights;
+        }
+    }
+
     void begin() {
         stash.clear();
     }
@@ -784,6 +797,25 @@ struct llama_moe_cache::impl {
 
         ids.resize(ggml_nelements(sel));
         ggml_backend_tensor_get_async(backend, sel, ids.data(), 0, ggml_nbytes(sel));
+        wbuf.clear();
+        if (trace != nullptr) {
+            const auto it_w = trace_weights.find(lookup);
+            const ggml_tensor * w = it_w != trace_weights.end() ? it_w->second : nullptr;
+            bool ok = w != nullptr && w->type == GGML_TYPE_F32 && ggml_is_contiguous(w) && w->data != nullptr && w->buffer != nullptr &&
+                      ggml_nelements(w) == ggml_nelements(sel);
+            for (int i = 0; i < n_nodes && ok; ++i) {
+                const ggml_tensor * node = ggml_graph_node(graph, i);
+                ok = node != w && node != w->view_src; // computed in this split: not ready yet
+            }
+            if (ok) {
+                wbuf.resize(ggml_nelements(w));
+                if (ggml_backend_buffer_is_host(w->buffer)) {
+                    memcpy(wbuf.data(), w->data, ggml_nbytes(w));
+                } else {
+                    ggml_backend_tensor_get_async(backend, w, wbuf.data(), 0, ggml_nbytes(w));
+                }
+            }
+        }
         ggml_backend_synchronize(backend);
 
         if (trace != nullptr) {
@@ -883,6 +915,10 @@ float llama_moe_cache::cpu_share() const {
 
 ggml_tensor * llama_moe_cache::get_cpu_map(int32_t il) const {
     return il >= 0 && il < (int32_t) pimpl->layers.size() ? pimpl->layers[il].cpu_map : nullptr;
+}
+
+void llama_moe_cache::set_trace_weights(const ggml_tensor * lookup, const ggml_tensor * weights) {
+    pimpl->set_trace_weights(lookup, weights);
 }
 
 void llama_moe_cache::set_cpu_part(const ggml_tensor * lookup, int32_t n_used, std::vector<const ggml_tensor *> inputs) {

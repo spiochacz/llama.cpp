@@ -2311,6 +2311,9 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
     ggml_tensor * cpu_ids = nullptr; // [n_expert_used, n_tokens], -1 for the experts computed on the device
     ggml_tensor * sel2d   = nullptr;
     ggml_tensor * lookup  = slots != nullptr ? slots->view_src : nullptr; // see build_moe_cache_slots
+    if (lookup != nullptr) {
+        moe_cache->set_trace_weights(lookup, weights);
+    }
     const std::array<ggml_tensor *, 4> exps = { up_exps, gate_exps, down_exps, gate_up_exps };
     if (slots != nullptr) {
         ggml_tensor * sel = lookup->src[1];

@@ -45,7 +45,7 @@ jobs:
             -DGGML_CUDA_CCCL_VERSION=v3.4.3 ^
             -DLLAMA_BUILD_BORINGSSL=ON
           set /A NINJA_JOBS=%NUMBER_OF_PROCESSORS%-1
-          cmake --build build --config Release -j %NINJA_JOBS% --target llama-server llama-bench llama-cli
+          cmake --build build --config Release -j %NINJA_JOBS% --target llama-server llama-bench llama-cli llama-perplexity
 
       - name: Pack
         shell: pwsh

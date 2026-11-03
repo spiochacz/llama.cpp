@@ -2328,15 +2328,41 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
         }
     }
 
-    // experimental (LLAMA_MOE_TOPN=n): route with the model's expert count (weights normalized over all of them, as
+    // experimental (LLAMA_MOE_TOPN): route with the model's expert count (weights normalized over all of them, as
     // trained), then compute only the n strongest experts and drop the rest without renormalizing.
+    // "n" applies to every layer; "n@a-b,c;m@d-e" sets n for layers a..b and c, m for d..e, the others unchanged.
     {
-        static const int topn = [] {
+        static const std::vector<int> topn_layer = [] {
+            std::vector<int> v(4096, 0);
             const char * s = getenv("LLAMA_MOE_TOPN");
-            const int n = s ? atoi(s) : 0;
-            if (n > 0) { LLAMA_LOG_INFO("%s: LLAMA_MOE_TOPN=%d\n", __func__, n); }
-            return n;
+            if (s == nullptr) { return v; }
+            std::string spec(s);
+            size_t p = 0;
+            while (p < spec.size()) {
+                size_t q = spec.find(';', p); if (q == std::string::npos) { q = spec.size(); }
+                const std::string rule = spec.substr(p, q - p);
+                const size_t at = rule.find('@');
+                const int n = atoi(rule.substr(0, at).c_str());
+                if (at == std::string::npos) {
+                    std::fill(v.begin(), v.end(), n);
+                } else {
+                    size_t r = at + 1;
+                    while (r < rule.size()) {
+                        size_t c = rule.find(',', r); if (c == std::string::npos) { c = rule.size(); }
+                        const std::string range = rule.substr(r, c - r);
+                        const size_t dash = range.find('-');
+                        const int a = atoi(range.c_str());
+                        const int b = dash == std::string::npos ? a : atoi(range.substr(dash + 1).c_str());
+                        for (int l = std::max(a, 0); l <= b && l < (int) v.size(); ++l) { v[l] = n; }
+                        r = c + 1;
+                    }
+                }
+                p = q + 1;
+            }
+            LLAMA_LOG_INFO("%s: LLAMA_MOE_TOPN=%s\n", __func__, s);
+            return v;
         }();
+        const int topn = il >= 0 && il < (int) topn_layer.size() ? topn_layer[il] : 0;
         if (topn > 0 && topn < n_expert_used && !weight_before_ffn && selected_experts_in == nullptr) {
             selected_experts = ggml_cont(ctx0, ggml_view_2d(ctx0, selected_experts, topn, n_tokens, selected_experts->nb[1], 0));
             ggml_tensor * w2 = ggml_reshape_2d(ctx0, weights, n_expert_used, n_tokens);

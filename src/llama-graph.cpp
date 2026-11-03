@@ -2328,6 +2328,25 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
         }
     }
 
+    // experimental (LLAMA_MOE_TOPN=n): route with the model's expert count (weights normalized over all of them, as
+    // trained), then compute only the n strongest experts and drop the rest without renormalizing.
+    {
+        static const int topn = [] {
+            const char * s = getenv("LLAMA_MOE_TOPN");
+            const int n = s ? atoi(s) : 0;
+            if (n > 0) { LLAMA_LOG_INFO("%s: LLAMA_MOE_TOPN=%d\n", __func__, n); }
+            return n;
+        }();
+        if (topn > 0 && topn < n_expert_used && !weight_before_ffn && selected_experts_in == nullptr) {
+            selected_experts = ggml_cont(ctx0, ggml_view_2d(ctx0, selected_experts, topn, n_tokens, selected_experts->nb[1], 0));
+            ggml_tensor * w2 = ggml_reshape_2d(ctx0, weights, n_expert_used, n_tokens);
+            w2 = ggml_cont(ctx0, ggml_view_2d(ctx0, w2, topn, n_tokens, w2->nb[1], 0));
+            weights = ggml_reshape_3d(ctx0, w2, 1, topn, n_tokens);
+            cb(weights, "ffn_moe_weights_topn", il);
+            n_expert_used = topn;
+        }
+    }
+
     //call early so that topk-moe can be used
     ggml_build_forward_expand(gf, weights);
 
@@ -2582,7 +2601,7 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
     // Use per-layer n_expert_used to bound the graph even during warmup (avoids
     // the large-add-nodes issue for uniform arches; for Puzzle the per-layer
     // value is correct). ref: https://github.com/ggml-org/llama.cpp/pull/14753
-    const uint32_t n_expert_used_il = hparams.n_expert_used(il);
+    const uint32_t n_expert_used_il = std::min<uint32_t>(hparams.n_expert_used(il), (uint32_t) experts->ne[1]);
     for (uint32_t i = 0; i < n_expert_used_il; ++i) {
         cur_experts[i] = ggml_view_2d(ctx0, experts, n_embd, n_tokens, experts->nb[2], i*experts->nb[1]);
 

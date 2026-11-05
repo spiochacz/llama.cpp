@@ -27,7 +27,7 @@ jobs:
             -DGGML_NATIVE=OFF -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON \
             -DGGML_OPENMP=OFF \
             -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=89 \
-            -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined 
+            -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined \
             -DLLAMA_BUILD_BORINGSSL=ON
           cmake --build build -j $(nproc) --target llama-server llama-bench llama-cli llama-perplexity
 

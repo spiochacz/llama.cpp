@@ -1,9 +1,8 @@
-name: linux-cuda build (moe-cache fork, RTX 4080 sm_89)
+name: linux-cuda build of upstream PR 30966 (moe-cache CPU misses, sm_89)
 
 on:
   push:
-    branches: [moe-cache-win-b12032]
-    paths: ['.github/workflows/linux-cuda-moe.yml', 'src/**', 'ggml/**', 'common/**', 'tools/server/**']
+    branches: [ci-linux-pr30966]
   workflow_dispatch:
 
 jobs:
@@ -17,6 +16,9 @@ jobs:
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git cmake ninja-build ccache build-essential > /dev/null
 
       - uses: actions/checkout@v6
+        with:
+          repository: ggml-org/llama.cpp
+          ref: refs/pull/30966/head
 
       - name: Build
         run: |
@@ -35,10 +37,10 @@ jobs:
           find build -name "*.so*" -exec cp -a {} pack/ \;
           cp -a /usr/local/cuda/lib64/libcudart.so.12* /usr/local/cuda/lib64/libcublas.so.12* /usr/local/cuda/lib64/libcublasLt.so.12* pack/
           git rev-parse HEAD > pack/COMMIT.txt
-          tar czf llama-linux-cuda12.8-sm89-moecache.tar.gz -C pack .
+          tar czf llama-linux-cuda12.8-sm89-pr30966.tar.gz -C pack .
 
       - uses: actions/upload-artifact@v4
         with:
-          name: llama-linux-cuda12.8-sm89-moecache
-          path: llama-linux-cuda12.8-sm89-moecache.tar.gz
+          name: llama-linux-cuda12.8-sm89-pr30966
+          path: llama-linux-cuda12.8-sm89-pr30966.tar.gz
           retention-days: 7

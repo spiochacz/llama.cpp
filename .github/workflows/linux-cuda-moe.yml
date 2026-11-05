@@ -1,0 +1,44 @@
+name: linux-cuda build (moe-cache fork, RTX 4080 sm_89)
+
+on:
+  push:
+    branches: [moe-cache-win-b12032]
+    paths: ['.github/workflows/linux-cuda-moe.yml', 'src/**', 'ggml/**', 'common/**', 'tools/server/**']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    container: nvidia/cuda:12.8.1-devel-ubuntu24.04
+    steps:
+      - name: Tools
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git cmake ninja-build ccache build-essential > /dev/null
+
+      - uses: actions/checkout@v6
+
+      - name: Build
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DGGML_NATIVE=OFF -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON \
+            -DGGML_OPENMP=OFF \
+            -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=89 \
+            -DLLAMA_BUILD_BORINGSSL=ON
+          cmake --build build -j $(nproc) --target llama-server llama-bench llama-cli llama-perplexity
+
+      - name: Pack
+        run: |
+          mkdir -p pack
+          cp -a build/bin/* pack/
+          find build -name "*.so*" -exec cp -a {} pack/ \;
+          cp -a /usr/local/cuda/lib64/libcudart.so.12* /usr/local/cuda/lib64/libcublas.so.12* /usr/local/cuda/lib64/libcublasLt.so.12* pack/
+          git rev-parse HEAD > pack/COMMIT.txt
+          tar czf llama-linux-cuda12.8-sm89-moecache.tar.gz -C pack .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: llama-linux-cuda12.8-sm89-moecache
+          path: llama-linux-cuda12.8-sm89-moecache.tar.gz
+          retention-days: 7

@@ -1065,6 +1065,11 @@ struct llm_graph_context {
     const llama_cross            * cross;
     llama_moe_cache              * moe_cache;
 
+    // device work that does not depend on the routed experts (e.g. the shared expert), set by the model before build_moe_ffn:
+    // with misses on the CPU it is queued right after the cached experts, so the device computes it while the CPU computes
+    // the misses, instead of waiting for them after the merge. The model resets it after the call.
+    ggml_tensor * moe_overlap = nullptr;
+
     const llama_prec_policy * prec_policy;
 
     const llama_hadamard * hdmd;

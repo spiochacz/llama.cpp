@@ -2578,6 +2578,12 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
         ggml_tensor * experts_dev = build_experts(cur, selected_experts, slots, true);
         ggml_build_forward_expand(gf, experts_dev);
 
+        // device work independent of the routed experts goes into the same split as the cached experts, before the CPU part,
+        // so it overlaps the misses on the CPU (the split after the merge waits for the CPU part)
+        if (moe_overlap != nullptr) {
+            ggml_build_forward_expand(gf, moe_overlap);
+        }
+
         // the CPU part comes after the slot lookup, whose copy callback fills the CPU map and reads the inputs of the CPU part
         const int n_nodes_dev = ggml_graph_n_nodes(gf);
         ggml_tensor * experts_cpu = build_experts(cur, sel2d, cpu_ids, false);

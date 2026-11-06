@@ -1,4 +1,4 @@
-name: linux-cuda build of upstream PR 30966 (moe-cache CPU misses, sm_89, OpenMP)
+name: linux-cuda build of upstream PR 30966 (moe-cache CPU misses, sm_89, OpenMP, CUDA 13.4)
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    container: nvidia/cuda:12.8.1-devel-ubuntu24.04
+    container: nvidia/cuda:13.4.3-devel-ubuntu24.04
     steps:
       - name: Tools
         run: |
@@ -36,12 +36,12 @@ jobs:
           mkdir -p pack
           cp -a build/bin/* pack/
           find build -name "*.so*" -exec cp -a {} pack/ \;
-          cp -a /usr/local/cuda/lib64/libcudart.so.12* /usr/local/cuda/lib64/libcublas.so.12* /usr/local/cuda/lib64/libcublasLt.so.12* pack/
+          cp -a /usr/local/cuda/lib64/libcudart.so.13* /usr/local/cuda/lib64/libcublas.so.13* /usr/local/cuda/lib64/libcublasLt.so.13* pack/
           git rev-parse HEAD > pack/COMMIT.txt
-          tar czf llama-linux-cuda12.8-sm89-pr30966-omp.tar.gz -C pack .
+          tar czf llama-linux-cuda13.4-sm89-pr30966-omp.tar.gz -C pack .
 
       - uses: actions/upload-artifact@v4
         with:
-          name: llama-linux-cuda12.8-sm89-pr30966-omp
-          path: llama-linux-cuda12.8-sm89-pr30966-omp.tar.gz
+          name: llama-linux-cuda13.4-sm89-pr30966-omp
+          path: llama-linux-cuda13.4-sm89-pr30966-omp.tar.gz
           retention-days: 7

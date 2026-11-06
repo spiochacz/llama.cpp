@@ -1,4 +1,4 @@
-name: linux-cuda build of upstream PR 30966 (moe-cache CPU misses, sm_89)
+name: linux-cuda build of upstream PR 30966 (moe-cache CPU misses, sm_89, OpenMP)
 
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DGGML_NATIVE=OFF -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON \
-            -DGGML_OPENMP=OFF \
+            -DGGML_OPENMP=ON \
             -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=89 \
             -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined \
             -DLLAMA_BUILD_BORINGSSL=ON
@@ -38,10 +38,10 @@ jobs:
           find build -name "*.so*" -exec cp -a {} pack/ \;
           cp -a /usr/local/cuda/lib64/libcudart.so.12* /usr/local/cuda/lib64/libcublas.so.12* /usr/local/cuda/lib64/libcublasLt.so.12* pack/
           git rev-parse HEAD > pack/COMMIT.txt
-          tar czf llama-linux-cuda12.8-sm89-pr30966.tar.gz -C pack .
+          tar czf llama-linux-cuda12.8-sm89-pr30966-omp.tar.gz -C pack .
 
       - uses: actions/upload-artifact@v4
         with:
-          name: llama-linux-cuda12.8-sm89-pr30966
-          path: llama-linux-cuda12.8-sm89-pr30966.tar.gz
+          name: llama-linux-cuda12.8-sm89-pr30966-omp
+          path: llama-linux-cuda12.8-sm89-pr30966-omp.tar.gz
           retention-days: 7
